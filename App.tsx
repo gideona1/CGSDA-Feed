@@ -6,113 +6,77 @@
  */
 
 import React from 'react';
-import type {PropsWithChildren} from 'react';
+
 import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
+  Appearance,
   StyleSheet,
-  Text,
-  useColorScheme,
-  View,
 } from 'react-native';
 
+import { MMKV } from 'react-native-mmkv';
 import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+  ApolloClient,
+  ApolloLink,
+  ApolloProvider,
+  HttpLink,
+  split,
+} from '@apollo/client';
+import { DEFAULT_DARK_THEME } from './src/config/theme/Dark.theme';
+import { DEFAULT_LIGHT_THEME } from './src/config/theme/Light.theme';
+import SetTheme from './src/config/theme/SetTheme';
+import Routes from './src/navigation/Routes';
+import { ThemeProvider } from './src/config/theme/Theme.context';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+import { setContext } from '@apollo/client/link/context';
+import { cache } from './src/config/defaults/cache';
+import { createUploadLink } from 'apollo-upload-client';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+export const storage = new MMKV();
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+// Initialize Apollo Client
+const authLink = setContext((_, { headers }) => {
+  const token = storage.getString('authAccessToken') || '';
+  return {
+    headers: {
+      ...headers,
+      authorization: token ? `Bearer ${token}` : '',
+      'Apollo-Require-Preflight': 'true'
+    },
   };
+});
 
+const client = new ApolloClient({
+  link: ApolloLink.from([
+    authLink.concat(
+      createUploadLink({
+        uri: 'http://localhost:8080/graphql',
+      }),
+    ),
+  ]),
+  cache: cache,
+});
+
+const App = () => {
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <ApolloProvider client={client}>
+        <ThemeProvider
+          initial={
+            Appearance.getColorScheme() === 'dark'
+              ? DEFAULT_DARK_THEME
+              : DEFAULT_LIGHT_THEME
+            // DEFAULT_LIGHT_THEME
+          }>
+          <SetTheme>
+            <Routes />
+          </SetTheme>
+        </ThemeProvider>
+      </ApolloProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
 });
 
 export default App;
